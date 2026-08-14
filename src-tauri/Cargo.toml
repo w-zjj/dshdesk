@@ -20,6 +20,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 ureq = "2"
+zip = "2"
 windows = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -28,3 +29,11 @@ windows = { version = "0.59", features = [
   "Win32_System_Threading",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+[profile.release]
+# 编译优先：关闭 LTO + 多 codegen-units 加速编译
+# 代价是二进制略大，但打包频率低，编译时间更重要
+strip = true
+lto = false
+codegen-units = 16
+opt-level = 1

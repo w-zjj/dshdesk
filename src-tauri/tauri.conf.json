@@ -28,7 +28,7 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
-    "resources": ["resources/dsh-bundle", "resources/node-portable"],
+    "resources": ["resources/dsh-bundle.zip", "resources/node-portable.zip"],
     "windows": {
       "nsis": {
         "installMode": "currentUser"

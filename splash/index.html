@@ -46,6 +46,10 @@
     </div>
   </div>
   <script>
+    window.__setBootStatus = function (msg) {
+      var s = document.getElementById('status');
+      if (s) s.textContent = msg || '';
+    };
     window.__showBootError = function (msg) {
       document.getElementById('loading').style.display = 'none';
       var e = document.getElementById('boot-err');

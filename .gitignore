@@ -2,8 +2,11 @@
 target/
 
 # 预装的大体积二进制资源（构建者用 scripts/fetch-dsh.ps1 自行拉取）
+# 散文件目录（历史）和 zip 打包产物都不入库
 src-tauri/resources/node-portable/
 src-tauri/resources/dsh-bundle/
+src-tauri/resources/node-portable.zip
+src-tauri/resources/dsh-bundle.zip
 
 # 临时/日志文件
 *.log
