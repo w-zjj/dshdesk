@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::Read;
 use std::net::{SocketAddr, TcpStream};
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
@@ -77,11 +78,24 @@ pub enum BootError {
     Spawn(String),
 }
 
-// 解压 zip 到 dest（dest 必须已创建）。用 enclosed_name 防止路径穿越。
+// 解压 zip 到 dest（dest 必须已创建）。
+// 优化：先顺序读取所有条目到内存（zip 必须顺序读），再用 rayon 并行写磁盘。
+// 单线程逐文件 File::create + io::copy 对 3.3 万小文件很慢（系统调用开销累积），
+// 并行写入把 File::create/write/close 分发到多核，显著提速。
 fn extract_zip(zip_path: &std::path::Path, dest: &std::path::Path) -> Result<(), String> {
     let file = File::open(zip_path).map_err(|e| format!("open {}: {}", zip_path.display(), e))?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| format!("read zip {}: {}", zip_path.display(), e))?;
+
+    // 1. 顺序读取所有条目到内存（zip 中央目录顺序读最快）
+    // 条目：(相对路径, 文件内容)；目录单独收集后批量创建
+    struct Entry {
+        rel: PathBuf,
+        data: Vec<u8>,
+    }
+    let mut entries: Vec<Entry> = Vec::with_capacity(archive.len() as usize);
+    let mut dirs: Vec<PathBuf> = Vec::new();
+
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -89,20 +103,39 @@ fn extract_zip(zip_path: &std::path::Path, dest: &std::path::Path) -> Result<(),
         let Some(name) = entry.enclosed_name() else {
             continue;
         };
-        let outpath = dest.join(&name);
         if entry.is_dir() {
-            std::fs::create_dir_all(&outpath)
-                .map_err(|e| format!("mkdir {}: {}", outpath.display(), e))?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                std::fs::create_dir_all(p).map_err(|e| format!("mkdir {}: {}", p.display(), e))?;
-            }
-            let mut out = File::create(&outpath)
-                .map_err(|e| format!("create {}: {}", outpath.display(), e))?;
-            std::io::copy(&mut entry, &mut out)
-                .map_err(|e| format!("copy {}: {}", outpath.display(), e))?;
+            dirs.push(name);
+            continue;
         }
+        let mut data = Vec::with_capacity(entry.size() as usize);
+        entry
+            .read_to_end(&mut data)
+            .map_err(|e| format!("read {}: {}", name.display(), e))?;
+        entries.push(Entry { rel: name, data });
     }
+
+    // 2. 先创建所有目录（顺序，避免并行 mkdir 竞争）
+    for d in &dirs {
+        std::fs::create_dir_all(dest.join(d))
+            .map_err(|e| format!("mkdir {}: {}", d.display(), e))?;
+    }
+
+    // 3. 并行写入文件（File::create + write 是主要瓶颈，rayon 多核并行）
+    use rayon::prelude::*;
+    entries
+        .par_iter()
+        .map(|e| -> Result<(), String> {
+            let outpath = dest.join(&e.rel);
+            if let Some(p) = outpath.parent() {
+                std::fs::create_dir_all(p)
+                    .map_err(|e| format!("mkdir {}: {}", p.display(), e))?;
+            }
+            std::fs::write(&outpath, &e.data)
+                .map_err(|e| format!("write {}: {}", outpath.display(), e))?;
+            Ok(())
+        })
+        .collect::<Result<(), String>>()?;
+
     Ok(())
 }
 
