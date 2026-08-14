@@ -68,15 +68,20 @@ pub enum BootError {
 }
 
 pub fn boot(app: &AppHandle) -> Result<(), BootError> {
-    // dev 模式下 resource_dir() 返回 target/debug，但 Tauri 不会把 resources 复制过去；
-    // release 打包后 resource_dir() 指向安装目录的资源目录，能正常找到。
-    // 回退到 CARGO_MANIFEST_DIR/resources 覆盖 dev 场景。
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .ok()
-        .filter(|p| p.join("node-portable").join("node.exe").exists())
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources"));
+    // Tauri 2 打包规则：tauri.conf.json 里配 "resources/node-portable"，
+    // 安装后会放在 $RESOURCE/resources/node-portable/（保留原始目录结构）。
+    // dev 模式下 resource_dir() 返回 target/debug（无 resources 子目录），
+    // 回退到源码目录的 resources/。
+    let resource_dir = if cfg!(debug_assertions) {
+        // dev: 源码目录 src-tauri/resources/ 下直接是 node-portable/
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources")
+    } else {
+        // release: 安装目录下 $RESOURCE/resources/
+        app.path()
+            .resource_dir()
+            .map_err(|e| BootError::Spawn(format!("resource_dir: {}", e)))?
+            .join("resources")
+    };
 
     // 便携 Node：resources/node-portable/node.exe
     let node_exe = resource_dir.join("node-portable").join("node.exe");
@@ -174,13 +179,14 @@ pub fn boot(app: &AppHandle) -> Result<(), BootError> {
         if let Some(w) = app2.get_webview_window("main") {
             if ready {
                 let url = format!("http://127.0.0.1:{}/", port);
-                let _ = w.eval(&format!("window.location.replace('{}')", url));
-            } else {
-                let lp = log_path.display().to_string().replace('\\', "/");
                 let _ = w.eval(&format!(
-                    "window.__showBootError('dsh 启动超时（45s）。日志：{}')",
-                    lp
+                    "window.location.replace({})",
+                    serde_json::to_string(&url).unwrap_or_default()
                 ));
+            } else {
+                let msg = format!("dsh 启动超时（45s）。日志：{}", log_path.display());
+                let escaped = serde_json::to_string(&msg).unwrap_or_default();
+                let _ = w.eval(&format!("window.__showBootError({})", escaped));
             }
         }
     });

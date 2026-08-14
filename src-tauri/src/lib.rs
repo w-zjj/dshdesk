@@ -55,7 +55,8 @@ pub fn run() {
             "about" => {
                 app.dialog()
                     .message(format!(
-                        "DeepSeek Harness 桌面版 v0.1.0\n内置 DSH: {}\n内置 Node: {}",
+                        "DeepSeek Harness 桌面版 v{}\n内置 DSH: {}\n内置 Node: {}",
+                        env!("CARGO_PKG_VERSION"),
                         dsh::DSH_PINNED_VERSION,
                         dsh::NODE_PINNED_VERSION
                     ))

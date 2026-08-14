@@ -2,7 +2,8 @@ use crate::DshHandle;
 use std::time::{Duration, Instant};
 
 pub fn graceful_kill(state: &DshHandle) {
-    let mut g = state.child.lock().unwrap();
+    // unwrap_or_else 处理锁中毒：即使前次持有者 panic，仍尝试清理子进程
+    let mut g = state.child.lock().unwrap_or_else(|e| e.into_inner());
     let Some(mut d) = g.take() else {
         return;
     };
