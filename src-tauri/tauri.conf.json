@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DeepSeek Harness",
+  "productName": "Dshdesk",
   "version": "0.1.0",
   "identifier": "com.deepseek.harness",
   "build": {
@@ -10,7 +10,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "DeepSeek Harness",
+        "title": "Dshdesk",
         "width": 1280,
         "height": 840,
         "minWidth": 900,
