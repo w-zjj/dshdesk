@@ -17,7 +17,8 @@
         "minHeight": 600,
         "url": "index.html",
         "visible": true,
-        "center": true
+        "center": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
