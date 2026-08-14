@@ -4,6 +4,7 @@ mod job_object;
 mod log_writer;
 mod port;
 mod shutdown;
+mod update_checker;
 
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, Submenu};
@@ -77,6 +78,34 @@ pub fn run() {
             if let Err(e) = build_menu(app) {
                 eprintln!("warn: set_menu failed: {}", e);
             }
+
+            // 后台检查更新：GitHub Releases API，有新版弹窗提示
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let local_tag = format!("v{}", env!("CARGO_PKG_VERSION"));
+                if let Some(info) = update_checker::check_latest() {
+                    if update_checker::is_newer(&info.tag, &local_tag) {
+                        let url = info.html_url.clone();
+                        let tag = info.tag.clone();
+                        let body = if info.body.is_empty() {
+                            String::new()
+                        } else {
+                            format!("\n\n{}", info.body)
+                        };
+                        app_handle
+                            .dialog()
+                            .message(format!("发现新版本 {}{}，点击确定前往下载", tag, body))
+                            .title("发现新版本")
+                            .show(move |confirmed| {
+                                if confirmed {
+                                    let _ = std::process::Command::new("explorer")
+                                        .arg(&url)
+                                        .spawn();
+                                }
+                            });
+                    }
+                }
+            });
 
             let win = app.get_webview_window("main");
             match dsh::boot(app.handle()) {

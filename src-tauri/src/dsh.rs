@@ -37,6 +37,29 @@ pub fn resolve_dsh_home() -> PathBuf {
         .join("dsh-home")
 }
 
+// 按修改时间降序排序，保留最新 N 个，删除其余 dsh-*.log
+fn cleanup_old_logs(dsh_home: &std::path::Path, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(dsh_home) else {
+        return;
+    };
+    let mut logs: Vec<(std::time::SystemTime, PathBuf)> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let path = e.path();
+            let name = path.file_name()?.to_str()?;
+            if !name.starts_with("dsh-") || !name.ends_with(".log") {
+                return None;
+            }
+            let mtime = e.metadata().ok()?.modified().ok()?;
+            Some((mtime, path))
+        })
+        .collect();
+    logs.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, path) in logs.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
 // 启动失败时的错误类型，供 splash 显示对应提示。
 pub enum BootError {
     NodeMissing(PathBuf),
@@ -87,6 +110,9 @@ pub fn boot(app: &AppHandle) -> Result<(), BootError> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let log_path = dsh_home.join(format!("dsh-{}.log", ts));
+
+    // 保留最新 30 个日志，旧的自动清理，避免长期堆积
+    cleanup_old_logs(&dsh_home, 30);
 
     let job = JobObject::new().map_err(|e| BootError::Spawn(format!("job: {}", e)))?;
 
