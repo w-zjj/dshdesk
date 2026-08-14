@@ -1,4 +1,4 @@
-# DeepSeek Harness 桌面版（Tauri 2 封装）
+# Dshdesk（DeepSeek Harness 桌面版，Tauri 2 封装）
 
 把官方 `dsh web` 封装成 Windows 桌面应用：Tauri 壳托管 dsh 进程生命周期（启动→等端口就绪→加载页面→退出时优雅清理），双击即用，无需手动开终端。
 
@@ -19,13 +19,14 @@
 
 ## 架构
 - **壳**：Tauri 2.x，仅一个静态 splash 启动页，dsh 就绪后 `eval` 跳转到 `http://127.0.0.1:<动态端口>/`。
-- **运行时**：便携 Node（`resources/node-portable/node.exe`）+ 预装 dsh（`resources/dsh-bundle/`），都打进安装包。
+- **运行时**：便携 Node + 预装 dsh 各压成一个 zip（`resources/dsh-bundle.zip` + `resources/node-portable.zip`）打进安装包，避免 NSIS 直接打包几万散文件导致打包/安装极慢。
 - **进程管理**：Rust 原生 `std::process::Command`（不用 `tauri-plugin-shell`，其 kill 是硬杀且杀不到孙进程 node）。
+  - 首启：`ensure_extracted()` 把两个 zip 解压到 `dsh_home/bundle` 和 `dsh_home/node`（用 `.bundle.ver` 版本门控避免重复解压），用 rayon 并行写磁盘加速。
   - `<node.exe> <bundle>/bin.js web --host 127.0.0.1 --port <动态端口>`，`CREATE_NEW_PROCESS_GROUP`。
   - 优雅退出：`AllocConsole`（隐藏）+ `GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, node_pid)` 触发 node 的 SIGINT → dsh 5s drain；超时则 `TerminateProcess` 兜底。
   - 异常兜底：Job Object（`KILL_ON_JOB_CLOSE`），Tauri 崩溃时内核自动回收整树，无残留端口。
 - **单实例**：`tauri-plugin-single-instance`。
-- **数据目录**：`%APPDATA%\DeepSeekHarness\dsh-home`（或 `$DSH_HOME`）。日志 `dsh-<ts>.log`。
+- **数据目录**：`%APPDATA%\DeepSeekHarness\dsh-home`（或 `$DSH_HOME`）。日志 `dsh-<ts>.log`；首启解压产物 `bundle/`、`node/`、`.bundle.ver` 也在该目录。
 
 ## 插件生态不受影响（保证）
 DSH 的插件机制完全保留，原因：
@@ -35,7 +36,7 @@ DSH 的插件机制完全保留，原因：
 4. **菜单"打开数据目录"**：方便用户在文件管理器查看 profile/插件/日志。
 
 ## 升级流程
-升级 DSH 或 Node 时，改 `src-tauri/src/dsh.rs` 的 `DSH_PINNED_VERSION` / `NODE_PINNED_VERSION` 常量，跑 `fetch-dsh.ps1` 重拉，`cargo tauri build` 重打包。`DSH_HOME` 数据目录保留（会话/凭据/插件不丢）。
+升级 DSH 或 Node 时，改 `src-tauri/src/dsh.rs` 的 `DSH_PINNED_VERSION` / `NODE_PINNED_VERSION` 常量，跑 `fetch-dsh.ps1`（脚本会拉取 dsh + Node、用 `trim-bundle.ps1` 清理冗余、压成两个 zip）。`cargo tauri build` 重打包。用户首启时 `.bundle.ver` 版本不匹配会自动重解压，`DSH_HOME` 数据目录的会话/凭据/插件不丢。
 
 ## 前置条件
 ### 构建者
@@ -61,7 +62,7 @@ cargo tauri build
 ```
 
 ## 验证清单
-- 启动后窗口标题 "DeepSeek Harness"，先显 splash，后跳 dsh UI。
+- 启动后窗口标题 "Dshdesk"，先显 splash（首启会显示"正在准备运行环境…"约 20-30s 解压，之后秒级），后跳 dsh UI。
 - Settings → Models 配 DeepSeek API key，跑一个 trivial 任务。
 - `tasklist | findstr node` 应见一个 node.exe（便携 Node）。
 - 点 × 关闭：≤6s 内 node 消失、端口释放。
@@ -72,5 +73,6 @@ cargo tauri build
 
 ## 限制（v0.1）
 - Node 版本由打包锁定，不跟随用户系统升级（与 dsh 锁版本一致，可接受）。
-- 仅 Windows。
-- 安装包体积：便携 Node ~30MB + dsh bundle ~50-100MB = 总约 80-130MB。
+- 仅 Windows x64。
+- 安装包体积约 100MB（便携 Node zip ~37MB + dsh bundle zip ~73MB + 主程序 ~11MB）。
+- 首次启动需解压两个 zip 到用户目录（约 20-30s，取决于 CPU/磁盘），之后启动秒级（DSH 进程加载 node_modules 固有开销除外）。
