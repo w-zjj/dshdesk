@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek Harness</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; height: 100%;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  #wrap {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+  .spinner {
+    width: 38px; height: 38px;
+    border: 3px solid #30363d;
+    border-top-color: #58a6ff;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status { font-size: 14px; color: #8b949e; }
+  .err-box { display: none; max-width: 560px; text-align: center; padding: 0 24px; }
+  .err-box .title { color: #f85149; font-size: 15px; margin-bottom: 8px; }
+  .err-box .detail { color: #8b949e; font-size: 13px; word-break: break-all; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="loading">
+      <div class="spinner"></div>
+      <div id="status">正在启动 DeepSeek Harness…</div>
+    </div>
+    <div id="boot-err" class="err-box">
+      <div class="title">启动失败</div>
+      <div class="detail" id="boot-err-detail"></div>
+    </div>
+  </div>
+  <script>
+    window.__showBootError = function (msg) {
+      document.getElementById('loading').style.display = 'none';
+      var e = document.getElementById('boot-err');
+      e.style.display = 'block';
+      document.getElementById('boot-err-detail').textContent = msg || '未知错误';
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Rust / Tauri 构建产物
+target/
+
+# 预装的大体积二进制资源（构建者用 scripts/fetch-dsh.ps1 自行拉取）
+src-tauri/resources/node-portable/
+src-tauri/resources/dsh-bundle/
+
+# 临时/日志文件
+*.log
+build-output.log
+
+# IDE / 系统文件
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 本地环境配置
+.env
+.env.local
